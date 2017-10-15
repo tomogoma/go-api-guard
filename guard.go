@@ -18,7 +18,7 @@ const (
 type KeyStore interface {
 	IsNotFoundError(error) bool
 	InsertAPIKey(userID string, key []byte) (*Key, error)
-	APIKeysByUserID(userID string, offset, count int64) ([]Key, error)
+	APIKeyByUserIDVal(userID string, key []byte) (*Key, error)
 }
 
 type KeyGenerator interface {
@@ -81,7 +81,7 @@ func (s *Guard) APIKeyValid(key []byte) (string, error) {
 	}
 	userID := string(userIDB[:n])
 
-	dbKeys, err := s.db.APIKeysByUserID(userID, 0, 10)
+	dbKey, err := s.db.APIKeyByUserIDVal(userID, key)
 	if err != nil {
 		if s.db.IsNotFoundError(err) {
 			return userID, typederrs.NewForbiddenf(badKeyWUsrErrf, key, userID)
@@ -89,13 +89,10 @@ func (s *Guard) APIKeyValid(key []byte) (string, error) {
 		return userID, typederrs.Newf("get API Key: %v", err)
 	}
 
-	for _, dbKey := range dbKeys {
-		if bytes.Equal(dbKey.Value, key) {
-			return userID, nil
-		}
+	if !bytes.Equal(dbKey.Value, key) {
+		return userID, typederrs.NewForbiddenf(badKeyWUsrErrf, key, userID)
 	}
-
-	return userID, typederrs.NewForbiddenf(badKeyWUsrErrf, key, userID)
+	return userID, nil
 }
 
 func (s *Guard) NewAPIKey(userID string) (*Key, error) {

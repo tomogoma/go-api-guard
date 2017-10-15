@@ -1,6 +1,6 @@
 package api
 
-import "github.com/tomogoma/go-commons/errors"
+import errors "github.com/tomogoma/go-typed-errors"
 
 type Option func(*Guard) error
 
