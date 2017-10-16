@@ -11,15 +11,23 @@ import (
 	"github.com/tomogoma/go-typed-errors"
 )
 
+type APIKeyMock struct {
+	Val []byte
+}
+
+func (k APIKeyMock) Value() []byte {
+	return k.Val
+}
+
 type DBMock struct {
 	typederrs.NotFoundErrCheck
 
 	ExpInsAPIKErr        error
-	ExpAPIKBUsrIDVal     *api.Key
+	ExpAPIKBUsrIDVal     api.Key
 	ExpAPIKsBUsrIDValErr error
 }
 
-func (db *DBMock) APIKeyByUserIDVal(userID string, key []byte) (*api.Key, error) {
+func (db *DBMock) APIKeyByUserIDVal(userID string, key []byte) (api.Key, error) {
 	if db.ExpAPIKsBUsrIDValErr != nil {
 		return nil, db.ExpAPIKsBUsrIDValErr
 	}
@@ -29,11 +37,11 @@ func (db *DBMock) APIKeyByUserIDVal(userID string, key []byte) (*api.Key, error)
 	return db.ExpAPIKBUsrIDVal, db.ExpAPIKsBUsrIDValErr
 }
 
-func (db *DBMock) InsertAPIKey(userID string, key []byte) (*api.Key, error) {
+func (db *DBMock) InsertAPIKey(userID string, key []byte) (api.Key, error) {
 	if db.ExpInsAPIKErr != nil {
 		return nil, db.ExpInsAPIKErr
 	}
-	return &api.Key{ID: "123", UserID: userID, Value: key}, db.ExpInsAPIKErr
+	return APIKeyMock{Val: key}, db.ExpInsAPIKErr
 }
 
 type KeyGenMock struct {
@@ -62,10 +70,10 @@ func ExampleGuard() {
 	// Generate API key
 	APIKey, _ := g.NewAPIKey("my-unique-user-id")
 
-	fmt.Println(string(APIKey.Value))
+	fmt.Println(string(APIKey.Value()))
 
 	// Validate API Key
-	userID, _ := g.APIKeyValid(APIKey.Value)
+	userID, _ := g.APIKeyValid(APIKey.Value())
 
 	fmt.Println(userID)
 
@@ -202,7 +210,7 @@ func TestGuard_NewAPIKey(t *testing.T) {
 			if ak == nil {
 				t.Fatalf("yielded nil *api.Key")
 			}
-			if !bytes.Equal(ak.Value, tc.expKey) {
+			if !bytes.Equal(ak.Value(), tc.expKey) {
 				t.Errorf("API Key mismatch: expect '%s' got '%s'",
 					tc.expKey, ak.Value)
 			}
@@ -231,50 +239,50 @@ func TestGuard_APIKeyValid(t *testing.T) {
 		{
 			name:     "valid (db)",
 			expUsrID: validUsrID,
-			key:      validKey.Value,
-			db: &DBMock{ExpAPIKBUsrIDVal: validKey},
-			expErr: false,
+			key:      validKey.Value(),
+			db:       &DBMock{ExpAPIKBUsrIDVal: validKey},
+			expErr:   false,
 		},
 		{
 			name:     "valid (master)",
 			key:      []byte(masterKey),
 			opts:     []api.Option{api.WithMasterKey(masterKey)},
 			expUsrID: api.MasterUser,
-			db: &DBMock{ExpAPIKsBUsrIDValErr: typederrs.NewNotFound("")},
-			expErr: false,
+			db:       &DBMock{ExpAPIKsBUsrIDValErr: typederrs.NewNotFound("")},
+			expErr:   false,
 		},
 		{
-			name:     "empty",
-			key:      make([]byte, 0),
-			expUsrID: "",
-			db: &DBMock{ExpAPIKBUsrIDVal: validKey},
+			name:            "empty",
+			key:             make([]byte, 0),
+			expUsrID:        "",
+			db:              &DBMock{ExpAPIKBUsrIDVal: validKey},
 			expErr:          true,
 			expForbidden:    false,
 			expUnauthorized: true,
 		},
 		{
-			name:     "separator only",
-			key:      []byte("."),
-			expUsrID: "",
-			db: &DBMock{ExpAPIKBUsrIDVal: validKey},
+			name:            "separator only",
+			key:             []byte("."),
+			expUsrID:        "",
+			db:              &DBMock{ExpAPIKBUsrIDVal: validKey},
 			expErr:          true,
 			expForbidden:    false,
 			expUnauthorized: true,
 		},
 		{
-			name:     "missing separator (key)",
-			key:      bytes.SplitN(validKey.Value, []byte("."), 2)[1],
-			expUsrID: "",
-			db: &DBMock{ExpAPIKBUsrIDVal: validKey},
+			name:            "missing separator (key)",
+			key:             bytes.SplitN(validKey.Value(), []byte("."), 2)[1],
+			expUsrID:        "",
+			db:              &DBMock{ExpAPIKBUsrIDVal: validKey},
 			expErr:          true,
 			expForbidden:    false,
 			expUnauthorized: true,
 		},
 		{
-			name:     "missing separator (b64 userID)",
-			key:      bytes.SplitN(validKey.Value, []byte("."), 2)[0],
-			expUsrID: "",
-			db: &DBMock{ExpAPIKBUsrIDVal: validKey},
+			name:            "missing separator (b64 userID)",
+			key:             bytes.SplitN(validKey.Value(), []byte("."), 2)[0],
+			expUsrID:        "",
+			db:              &DBMock{ExpAPIKBUsrIDVal: validKey},
 			expErr:          true,
 			expForbidden:    false,
 			expUnauthorized: true,
@@ -282,16 +290,16 @@ func TestGuard_APIKeyValid(t *testing.T) {
 		{
 			name: "invalid key",
 			// "aW52YWxpZFVzZXJJRA==" => base64("invalidUserID")
-			key:      []byte("aW52YWxpZFVzZXJJRA==.anapikey"),
-			expUsrID: "invalidUserID",
-			db: &DBMock{ExpAPIKBUsrIDVal: validKey},
+			key:             []byte("aW52YWxpZFVzZXJJRA==.anapikey"),
+			expUsrID:        "invalidUserID",
+			db:              &DBMock{ExpAPIKBUsrIDVal: validKey},
 			expErr:          true,
 			expForbidden:    true,
 			expUnauthorized: false,
 		},
 		{
 			name:            "none found",
-			key:             validKey.Value,
+			key:             validKey.Value(),
 			expUsrID:        validUsrID,
 			db:              &DBMock{ExpAPIKsBUsrIDValErr: typederrs.NewNotFound("no keys for 12345")},
 			expErr:          true,
@@ -300,7 +308,7 @@ func TestGuard_APIKeyValid(t *testing.T) {
 		},
 		{
 			name:     "db report error",
-			key:      validKey.Value,
+			key:      validKey.Value(),
 			expUsrID: validUsrID,
 			db:       &DBMock{ExpAPIKsBUsrIDValErr: typederrs.New("some errors")},
 			expErr:   true,

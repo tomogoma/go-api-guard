@@ -4,7 +4,6 @@ package api
 import (
 	"bytes"
 	"encoding/base64"
-	"time"
 
 	"github.com/tomogoma/generator"
 	"github.com/tomogoma/go-typed-errors"
@@ -17,20 +16,16 @@ const (
 
 type KeyStore interface {
 	IsNotFoundError(error) bool
-	InsertAPIKey(userID string, key []byte) (*Key, error)
-	APIKeyByUserIDVal(userID string, key []byte) (*Key, error)
+	InsertAPIKey(userID string, key []byte) (Key, error)
+	APIKeyByUserIDVal(userID string, key []byte) (Key, error)
 }
 
 type KeyGenerator interface {
 	SecureRandomBytes(length int) ([]byte, error)
 }
 
-type Key struct {
-	ID         string
-	UserID     string
-	Value      []byte
-	CreateDate time.Time
-	UpdateDate time.Time
+type Key interface {
+	Value() []byte
 }
 
 type Guard struct {
@@ -89,13 +84,13 @@ func (s *Guard) APIKeyValid(key []byte) (string, error) {
 		return userID, typederrs.Newf("get API Key: %v", err)
 	}
 
-	if !bytes.Equal(dbKey.Value, key) {
+	if !bytes.Equal(dbKey.Value(), key) {
 		return userID, typederrs.NewForbiddenf(badKeyWUsrErrf, key, userID)
 	}
 	return userID, nil
 }
 
-func (s *Guard) NewAPIKey(userID string) (*Key, error) {
+func (s *Guard) NewAPIKey(userID string) (Key, error) {
 
 	if userID == "" {
 		return nil, typederrs.NewClient("userID was empty")
