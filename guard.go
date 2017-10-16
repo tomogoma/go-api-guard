@@ -95,13 +95,13 @@ func (s *Guard) NewAPIKey(userID string) (Key, error) {
 	if userID == "" {
 		return nil, typederrs.NewClient("userID was empty")
 	}
-	userID = base64.StdEncoding.EncodeToString([]byte(userID))
+	b64UsrID := base64.StdEncoding.EncodeToString([]byte(userID))
 
 	key, err := s.gen.SecureRandomBytes(s.apiKeyLen)
 	if err != nil {
 		return nil, typederrs.Newf("generate key: %v", err)
 	}
-	key = bytes.Join([][]byte{[]byte(userID), key}, []byte("."))
+	key = bytes.Join([][]byte{[]byte(b64UsrID), key}, []byte("."))
 
 	k, err := s.db.InsertAPIKey(userID, key)
 	if err != nil {

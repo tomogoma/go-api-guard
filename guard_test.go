@@ -25,6 +25,7 @@ type DBMock struct {
 	ExpInsAPIKErr        error
 	ExpAPIKBUsrIDVal     api.Key
 	ExpAPIKsBUsrIDValErr error
+	RecInsAPIKUsrID      string
 }
 
 func (db *DBMock) APIKeyByUserIDVal(userID string, key []byte) (api.Key, error) {
@@ -41,6 +42,7 @@ func (db *DBMock) InsertAPIKey(userID string, key []byte) (api.Key, error) {
 	if db.ExpInsAPIKErr != nil {
 		return nil, db.ExpInsAPIKErr
 	}
+	db.RecInsAPIKUsrID = userID
 	return APIKeyMock{Val: key}, db.ExpInsAPIKErr
 }
 
@@ -156,7 +158,7 @@ func TestGuard_NewAPIKey(t *testing.T) {
 	tt := []struct {
 		name     string
 		userID   string
-		db       api.KeyStore
+		db       *DBMock
 		opts     []api.Option
 		expKey   []byte
 		expErr   bool
@@ -213,6 +215,10 @@ func TestGuard_NewAPIKey(t *testing.T) {
 			if !bytes.Equal(ak.Value(), tc.expKey) {
 				t.Errorf("API Key mismatch: expect '%s' got '%s'",
 					tc.expKey, ak.Value)
+			}
+			if tc.userID != tc.db.RecInsAPIKUsrID {
+				t.Errorf("User ID mismatch: expect '%s', got '%s'",
+					tc.userID, tc.db.RecInsAPIKUsrID)
 			}
 		})
 	}
