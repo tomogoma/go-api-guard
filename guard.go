@@ -29,8 +29,8 @@ type Key interface {
 }
 
 type Guard struct {
-	typederrs.ClErrCheck
-	typederrs.AuthErrCheck
+	errors.ClErrCheck
+	errors.AuthErrCheck
 	db        KeyStore
 	gen       KeyGenerator
 	masterKey string
@@ -42,13 +42,13 @@ var badKeyErrf = "invalid API key (%s)"
 
 func NewGuard(db KeyStore, opts ...Option) (*Guard, error) {
 	if db == nil {
-		return nil, typederrs.New("KeyStore was nil")
+		return nil, errors.New("KeyStore was nil")
 	}
 	g := &Guard{db: db, apiKeyLen: DefaultAPIKeyLength}
 	var err error
 	g.gen, err = generator.NewCharSet(generator.AlphaNumericChars)
 	if err != nil {
-		return nil, typederrs.Newf("creating API Key generator")
+		return nil, errors.Newf("creating API Key generator")
 	}
 	for _, f := range opts {
 		if err := f(g); err != nil {
@@ -66,26 +66,26 @@ func (s *Guard) APIKeyValid(key []byte) (string, error) {
 
 	pair := bytes.SplitN(key, []byte("."), 2)
 	if len(pair) < 2 || len(pair[0]) == 0 {
-		return "", typederrs.NewUnauthorizedf(badKeyErrf, key)
+		return "", errors.NewUnauthorizedf(badKeyErrf, key)
 	}
 
 	userIDB := make([]byte, len(pair[0]))
 	n, err := base64.StdEncoding.Decode(userIDB, pair[0])
 	if err != nil {
-		return "", typederrs.NewForbiddenf(badKeyErrf, key)
+		return "", errors.NewForbiddenf(badKeyErrf, key)
 	}
 	userID := string(userIDB[:n])
 
 	dbKey, err := s.db.APIKeyByUserIDVal(userID, key)
 	if err != nil {
 		if s.db.IsNotFoundError(err) {
-			return userID, typederrs.NewForbiddenf(badKeyWUsrErrf, key, userID)
+			return userID, errors.NewForbiddenf(badKeyWUsrErrf, key, userID)
 		}
-		return userID, typederrs.Newf("get API Key: %v", err)
+		return userID, errors.Newf("get API Key: %v", err)
 	}
 
 	if !bytes.Equal(dbKey.Value(), key) {
-		return userID, typederrs.NewForbiddenf(badKeyWUsrErrf, key, userID)
+		return userID, errors.NewForbiddenf(badKeyWUsrErrf, key, userID)
 	}
 	return userID, nil
 }
@@ -93,19 +93,19 @@ func (s *Guard) APIKeyValid(key []byte) (string, error) {
 func (s *Guard) NewAPIKey(userID string) (Key, error) {
 
 	if userID == "" {
-		return nil, typederrs.NewClient("userID was empty")
+		return nil, errors.NewClient("userID was empty")
 	}
 	b64UsrID := base64.StdEncoding.EncodeToString([]byte(userID))
 
 	key, err := s.gen.SecureRandomBytes(s.apiKeyLen)
 	if err != nil {
-		return nil, typederrs.Newf("generate key: %v", err)
+		return nil, errors.Newf("generate key: %v", err)
 	}
 	key = bytes.Join([][]byte{[]byte(b64UsrID), key}, []byte("."))
 
 	k, err := s.db.InsertAPIKey(userID, key)
 	if err != nil {
-		return nil, typederrs.Newf("store key: %v", err)
+		return nil, errors.Newf("store key: %v", err)
 	}
 	return k, nil
 }
